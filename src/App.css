@@ -1,0 +1,238 @@
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-hover: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --live: #f85149;
+  --win: #3fb950;
+  --font: 'Outfit', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.app-header {
+  text-align: center;
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0.5rem 0 0;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem 0;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.controls label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.year-select {
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.year-select:hover,
+.year-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.app-footer {
+  padding: 1rem 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  border-top: 1px solid var(--border);
+}
+
+.app-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Sections */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.season-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+
+.loading,
+.error-msg {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.error-msg {
+  color: var(--live);
+}
+
+/* Standings table */
+.standings-section {
+  overflow: hidden;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.standings-table th,
+.standings-table td {
+  padding: 0.75rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.standings-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+}
+
+.standings-table th:first-child,
+.standings-table td:first-child {
+  padding-left: 1rem;
+}
+
+.standings-table th:last-child,
+.standings-table td:last-child {
+  padding-right: 1rem;
+}
+
+.standings-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.standings-table .pos {
+  width: 2rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.standings-table .team-col {
+  min-width: 180px;
+}
+
+.standings-table .team-col .crest {
+  width: 24px;
+  height: 24px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+.standings-table .team-name {
+  vertical-align: middle;
+  font-weight: 600;
+}
+
+.standings-table .gd-col {
+  font-weight: 600;
+}
+
+.standings-table .pts-col {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.standings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  .standings-table {
+    font-size: 0.8rem;
+  }
+
+  .standings-table th,
+  .standings-table td {
+    padding: 0.5rem 0.25rem;
+  }
+
+  .standings-table .team-col {
+    min-width: 120px;
+  }
+}
