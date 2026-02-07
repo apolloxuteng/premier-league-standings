@@ -3,6 +3,7 @@ node_modules
 
 # Build
 dist
+website
 
 # Environment (contains secrets - never commit)
 .env

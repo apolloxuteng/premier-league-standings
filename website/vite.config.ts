@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      outDir: 'website',
+    },
     server: {
       proxy: {
         '/api/football': {
