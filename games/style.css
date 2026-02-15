@@ -1,0 +1,173 @@
+/* --- Match Simulator: Manchester United vs Manchester City --- */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #eee;
+  font-family: system-ui, -apple-system, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.game-container {
+  max-width: 900px;
+  width: 100%;
+}
+
+/* --- Scoreboard --- */
+.scoreboard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #16213e;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid #0f3460;
+  border-bottom: none;
+}
+
+.team {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.team-home {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.team-away {
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.team-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-home .team-name { color: #e63946; }
+.team-away .team-name { color: #4361ee; }
+
+.team-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  min-width: 2ch;
+  text-align: center;
+}
+
+.team-home .team-score { color: #e63946; }
+.team-away .team-score { color: #4361ee; }
+
+.match-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #94a3b8;
+}
+
+.btn-control {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  background: #94a3b8;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-control:hover {
+  background: #cbd5e1;
+}
+
+/* --- Pitch container --- */
+.pitch-wrap {
+  background: #0f3460;
+  padding: 8px;
+  border-left: 1px solid #0f3460;
+  border-right: 1px solid #0f3460;
+}
+
+#pitch {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  background: #2d6a4f;
+  border-radius: 4px;
+}
+
+/* --- Footer controls --- */
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #16213e;
+  border-radius: 0 0 12px 12px;
+  border: 1px solid #0f3460;
+  border-top: none;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-primary {
+  color: #fff;
+  background: #4361ee;
+}
+
+.btn-primary:hover {
+  background: #5a75f5;
+}
+
+.btn-secondary {
+  color: #1a1a2e;
+  background: #64748b;
+}
+
+.btn-secondary:hover {
+  background: #94a3b8;
+}
+
+@media (max-width: 640px) {
+  .scoreboard {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .team-name {
+    font-size: 0.8rem;
+  }
+
+  #pitch {
+    width: 100%;
+    height: auto;
+  }
+}

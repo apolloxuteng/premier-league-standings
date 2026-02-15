@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Man United vs Man City — Match Simulator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="game-container">
+    <header class="scoreboard">
+      <div class="team team-home">
+        <span class="team-name">Manchester United</span>
+        <span class="team-score" id="score-home">0</span>
+      </div>
+      <div class="match-info">
+        <span class="timer" id="timer">0:00</span>
+        <button type="button" class="btn-control" id="btn-pause" aria-label="Pause">Pause</button>
+      </div>
+      <div class="team team-away">
+        <span class="team-score" id="score-away">0</span>
+        <span class="team-name">Manchester City</span>
+      </div>
+    </header>
+
+    <div class="pitch-wrap">
+      <canvas id="pitch" width="800" height="500" aria-label="Football pitch"></canvas>
+    </div>
+
+    <footer class="controls">
+      <button type="button" class="btn btn-primary" id="btn-start">Start</button>
+      <button type="button" class="btn btn-secondary" id="btn-reset">Reset</button>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
