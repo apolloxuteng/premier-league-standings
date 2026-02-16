@@ -46,7 +46,8 @@
   let lastTime = 0;
   let lastActionTime = 0;
   let lastGoalTime = 0;
-  const GOAL_COOLDOWN_MS = 150;
+  const GOAL_COOLDOWN_MS = 80;
+  const GATE_DEPTH = 25;
 
   let ball = { x: CENTER_X, y: CENTER_Y, vx: 0, vy: 0, attachedTo: null };
   let players = [];
@@ -397,18 +398,26 @@
   }
 
   function updateBall(dt, timestamp) {
-    // Goal check first (including when ball is dribbled over the line).
-    // Cooldown prevents re-triggering right after kickoff.
+    // Goal: count when ball is inside the gate area (goal mouth). Check every frame.
+    const inLeftGate =
+      ball.x < GATE_DEPTH &&
+      ball.y >= GOAL_Y - BALL_RADIUS &&
+      ball.y <= GOAL_Y + GOAL_WIDTH + BALL_RADIUS;
+    const inRightGate =
+      ball.x > PITCH_WIDTH - GATE_DEPTH &&
+      ball.y >= GOAL_Y - BALL_RADIUS &&
+      ball.y <= GOAL_Y + GOAL_WIDTH + BALL_RADIUS;
+
     const canDetectGoal = !lastGoalTime || (timestamp - lastGoalTime > GOAL_COOLDOWN_MS);
     if (canDetectGoal) {
-      if (ball.x < -BALL_RADIUS) {
+      if (inLeftGate) {
         lastGoalTime = timestamp;
         scoreAway++;
         updateScoreboard();
         resetBallAndKickoff(HOME);
         return;
       }
-      if (ball.x > PITCH_WIDTH + BALL_RADIUS) {
+      if (inRightGate) {
         lastGoalTime = timestamp;
         scoreHome++;
         updateScoreboard();
@@ -431,7 +440,7 @@
       ball.vy *= -0.6;
     }
 
-    ball.x = Math.max(BALL_RADIUS, Math.min(PITCH_WIDTH - BALL_RADIUS, ball.x));
+    // Do not clamp ball.x — let the ball enter the gate area so a goal can be counted
   }
 
   function tick(timestamp) {
