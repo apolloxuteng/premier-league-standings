@@ -1,13 +1,13 @@
 /**
  * Manchester United vs Manchester City — Match Simulator
- * Canvas-based 2D football vibe simulator. Structure is kept modular for
- * future extension (AI, user controls, tactics).
+ * Canvas-based 2D football simulator with Dribble / Pass / Shoot logic.
+ * Players per team configurable from 2 to 11.
  */
 
 (function () {
   'use strict';
 
-  // --- Constants (extend for different formations / difficulty) ---
+  // --- Pitch & game constants ---
   const PITCH_WIDTH = 800;
   const PITCH_HEIGHT = 500;
   const GOAL_WIDTH = 120;
@@ -16,11 +16,9 @@
   const CENTER_Y = PITCH_HEIGHT / 2;
   const PLAYER_RADIUS = 14;
   const BALL_RADIUS = 10;
-  const PLAYERS_PER_TEAM = 5;
 
-  // Team ids for goals and drawing
-  const HOME = 0;   // Manchester United (red)
-  const AWAY = 1;   // Manchester City (blue)
+  const HOME = 0;   // Manchester United (red), attacks right
+  const AWAY = 1;   // Manchester City (blue), attacks left
 
   const COLORS = {
     pitch: '#2d6a4f',
@@ -30,6 +28,15 @@
     ball: '#ffffff',
   };
 
+  // Possession: only a player within this distance can perform an action
+  const POSSESSION_RADIUS = 52;
+  const ACTION_COOLDOWN_MS = 700;
+  const PLAYER_SPEED = 0.04;
+  const PLAYER_DAMPING = 0.89;
+  const PASS_POWER = 0.38;
+  const SHOT_POWER = 0.42;
+  const ATTACKING_THIRD_X = 180;
+
   // --- State ---
   let canvas, ctx;
   let scoreHome = 0, scoreAway = 0;
@@ -37,94 +44,83 @@
   let isRunning = false;
   let animationId = null;
   let lastTime = 0;
+  let lastActionTime = 0;
+  let lastGoalTime = 0;
+  const GOAL_COOLDOWN_MS = 150;
 
-  let ball = { x: CENTER_X, y: CENTER_Y, vx: 0, vy: 0 };
+  let ball = { x: CENTER_X, y: CENTER_Y, vx: 0, vy: 0, attachedTo: null };
   let players = [];
 
+  /** Read players per team from UI (2–11). */
+  function getPlayersPerTeam() {
+    const el = document.getElementById('players-per-team');
+    if (!el) return 5;
+    const n = parseInt(el.value, 10);
+    return Math.min(11, Math.max(2, isNaN(n) ? 5 : n));
+  }
+
   /**
-   * Initialize players on the pitch. Extend this to load formations or AI config.
+   * Initialize players. Uses configurable count per team; formation spreads
+   * players in own half. Extend for custom formations.
    */
   function initPlayers() {
     players = [];
-    const spacingX = (CENTER_X - 80) / (PLAYERS_PER_TEAM - 1 || 1);
-    const spacingY = PITCH_HEIGHT / (PLAYERS_PER_TEAM + 1);
+    const n = getPlayersPerTeam();
+    const spacingX = (CENTER_X - 100) / (n - 1 || 1);
+    const spacingY = PITCH_HEIGHT / (n + 1);
 
-    for (let i = 0; i < PLAYERS_PER_TEAM; i++) {
+    for (let i = 0; i < n; i++) {
       players.push({
         id: 'h' + i,
         team: HOME,
-        x: 80 + i * spacingX + (Math.random() - 0.5) * 30,
-        y: spacingY * (i + 1) + (Math.random() - 0.5) * 20,
+        x: 60 + i * spacingX + (Math.random() - 0.5) * 25,
+        y: spacingY * (i + 1) + (Math.random() - 0.5) * 15,
         vx: 0,
         vy: 0,
-        targetX: null,
-        targetY: null,
       });
     }
-
-    for (let i = 0; i < PLAYERS_PER_TEAM; i++) {
+    for (let i = 0; i < n; i++) {
       players.push({
         id: 'a' + i,
         team: AWAY,
-        x: PITCH_WIDTH - 80 - i * spacingX + (Math.random() - 0.5) * 30,
-        y: spacingY * (i + 1) + (Math.random() - 0.5) * 20,
+        x: PITCH_WIDTH - 60 - i * spacingX + (Math.random() - 0.5) * 25,
+        y: spacingY * (i + 1) + (Math.random() - 0.5) * 15,
         vx: 0,
         vy: 0,
-        targetX: null,
-        targetY: null,
       });
     }
   }
 
-  /**
-   * Reset ball to center. Call after goal or on reset.
-   */
   function resetBall() {
     ball.x = CENTER_X;
     ball.y = CENTER_Y;
     ball.vx = 0;
     ball.vy = 0;
+    ball.attachedTo = null;
   }
 
-  /**
-   * Draw the pitch (green + white lines). Extend to add more markings.
-   */
   function drawPitch() {
     const w = PITCH_WIDTH;
     const h = PITCH_HEIGHT;
     ctx.fillStyle = COLORS.pitch;
     ctx.fillRect(0, 0, w, h);
-
     ctx.strokeStyle = COLORS.line;
     ctx.lineWidth = 2;
-
-    // Outline
     ctx.strokeRect(2, 2, w - 4, h - 4);
-
-    // Halfway line
     ctx.beginPath();
     ctx.moveTo(CENTER_X, 0);
     ctx.lineTo(CENTER_X, h);
     ctx.stroke();
-
-    // Center circle
     ctx.beginPath();
     ctx.arc(CENTER_X, CENTER_Y, 80, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Goal areas (simplified rectangles)
     ctx.strokeRect(0, GOAL_Y - 40, 80, GOAL_WIDTH + 80);
     ctx.strokeRect(w - 80, GOAL_Y - 40, 80, GOAL_WIDTH + 80);
-
-    // Goal lines
     ctx.lineWidth = 3;
     ctx.strokeRect(0, GOAL_Y, 8, GOAL_WIDTH);
     ctx.strokeRect(w - 8, GOAL_Y, 8, GOAL_WIDTH);
   }
 
-  /**
-   * Draw a single player (circle). Replace with sprite/icon later if needed.
-   */
   function drawPlayer(p) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
@@ -135,9 +131,6 @@
     ctx.stroke();
   }
 
-  /**
-   * Draw the ball.
-   */
   function drawBall() {
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
@@ -148,17 +141,13 @@
     ctx.stroke();
   }
 
-  /**
-   * Find closest player to the ball (any team). Useful for pass/kick logic.
-   */
-  function getClosestPlayerToBall() {
+  /** Closest player to the ball within possession radius, or null. */
+  function getPossessor() {
     let best = null;
     let bestD = Infinity;
     for (const p of players) {
-      const dx = ball.x - p.x;
-      const dy = ball.y - p.y;
-      const d = Math.hypot(dx, dy);
-      if (d < bestD) {
+      const d = Math.hypot(ball.x - p.x, ball.y - p.y);
+      if (d < POSSESSION_RADIUS && d < bestD) {
         bestD = d;
         best = p;
       }
@@ -167,91 +156,210 @@
   }
 
   /**
-   * Find a teammate to pass to (closest in range). Extend for AI passing choice.
+   * Dribble score: best when in open field (few players near the ball).
+   * Returns 0–1; higher = more space to dribble.
    */
-  function getPassTarget(passer) {
-    let best = null;
-    let bestD = Infinity;
+  function getDribbleScore(player) {
+    const radius = 75;
+    let count = 0;
     for (const p of players) {
-    if (p.team !== passer.team || p === passer) continue;
+      if (p === player) continue;
+      const d = Math.hypot(p.x - ball.x, p.y - ball.y);
+      if (d < radius) count++;
+    }
+    return 1 / (1 + count * 0.6);
+  }
+
+  /**
+   * Check if the passing lane from ball to target is clear (no one in the way).
+   * Uses segment-to-point distance; anyone within laneRadius blocks.
+   */
+  function isPassLaneClear(targetPlayer, laneRadius) {
+    const ax = ball.x;
+    const ay = ball.y;
+    const bx = targetPlayer.x;
+    const by = targetPlayer.y;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+
+    for (const p of players) {
+      if (p === targetPlayer) continue;
+      const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / (len * len)));
+      const px = ax + t * dx;
+      const py = ay + t * dy;
+      const dist = Math.hypot(p.x - px, p.y - py);
+      if (dist < (laneRadius || 28)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Pass score: best when a teammate is in range and the lane is clear (fast ball movement).
+   * Returns 0–1; higher = good pass option.
+   */
+  function getPassScore(player) {
+    let best = 0;
+    for (const p of players) {
+      if (p.team !== player.team || p === player) continue;
       const dx = p.x - ball.x;
       const dy = p.y - ball.y;
       const d = Math.hypot(dx, dy);
-      if (d > 40 && d < 200 && d < bestD) {
-        bestD = d;
-        best = p;
-      }
+      if (d < 35 || d > 220) continue;
+      if (!isPassLaneClear(p, 26)) continue;
+      const score = 0.3 + 0.7 * (1 - (d - 35) / 185);
+      if (score > best) best = score;
     }
     return best;
   }
 
   /**
-   * Kick the ball toward a target (x,y). Used for passes and shots.
+   * Shoot score: best when close to the opponent's goal (in attacking third).
+   * Returns 0–1; higher = better shooting position.
    */
-  function kickBallToward(tx, ty, power = 0.4) {
+  function getShootScore(player) {
+    const goalX = player.team === HOME ? PITCH_WIDTH : 0;
+    const distToGoal = Math.hypot(goalX - ball.x, CENTER_Y - ball.y);
+    const inAttackingThird = player.team === HOME
+      ? ball.x > PITCH_WIDTH - ATTACKING_THIRD_X
+      : ball.x < ATTACKING_THIRD_X;
+    if (!inAttackingThird) return 0;
+    return Math.max(0, 1 - distToGoal / 180);
+  }
+
+  /**
+   * Choose action for the player in possession: dribble, pass, or shoot.
+   * Uses scores and simple thresholds so dribble is default in open field,
+   * pass when lane is clear, shoot when close to goal.
+   */
+  function chooseAction(player) {
+    const dribble = getDribbleScore(player);
+    const pass = getPassScore(player);
+    const shoot = getShootScore(player);
+
+    if (shoot > 0.4) return 'shoot';
+    if (pass > 0.5 && pass >= dribble) return 'pass';
+    return 'dribble';
+  }
+
+  /** Kick ball toward a point (for pass or shot). */
+  function kickBallToward(tx, ty, power) {
+    ball.attachedTo = null;
     const dx = tx - ball.x;
     const dy = ty - ball.y;
     const d = Math.hypot(dx, dy) || 1;
-    ball.vx += (dx / d) * power;
-    ball.vy += (dy / d) * power;
+    ball.vx = (dx / d) * power;
+    ball.vy = (dy / d) * power;
   }
 
-  let lastKickTime = 0;
-  /**
-   * Simulate a pass: nearest player kicks ball toward a teammate. Call from game loop.
-   * Extend to add shot-on-goal logic or user-triggered passes.
-   */
-  function tryPass(timestamp) {
-    if (timestamp - lastKickTime < 1500) return;
-    const closest = getClosestPlayerToBall();
-    if (!closest) return;
-    const distToBall = Math.hypot(ball.x - closest.x, ball.y - closest.y);
-    if (distToBall > 60) return;
-
-    const target = getPassTarget(closest);
-    if (target) {
-      kickBallToward(target.x, target.y, 0.35);
-      lastKickTime = timestamp;
-    } else {
-      // No pass target: kick toward goal (simple shot)
-      const goalY = CENTER_Y + (Math.random() - 0.5) * 60;
-      if (closest.team === HOME) kickBallToward(PITCH_WIDTH - 20, goalY, 0.4);
-      else kickBallToward(20, goalY, 0.4);
-      lastKickTime = timestamp;
+  /** Execute pass: find best teammate with clear lane and kick. */
+  function executePass(player) {
+    let best = null;
+    let bestScore = 0;
+    for (const p of players) {
+      if (p.team !== player.team || p === player) continue;
+      const dx = p.x - ball.x;
+      const dy = p.y - ball.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 40 || d > 200) continue;
+      if (!isPassLaneClear(p, 26)) continue;
+      const score = 1 - d / 200;
+      if (score > bestScore) {
+        bestScore = score;
+        best = p;
+      }
     }
+    if (best) kickBallToward(best.x, best.y, PASS_POWER);
+  }
+
+  /** Execute shot: kick toward goal with small random offset. */
+  function executeShoot(player) {
+    const goalX = player.team === HOME ? PITCH_WIDTH + 10 : -10;
+    const goalY = CENTER_Y + (Math.random() - 0.5) * 50;
+    kickBallToward(goalX, goalY, SHOT_POWER);
   }
 
   /**
-   * Update player movement: move toward ball or wander in half. Extend for AI.
+   * Perform one action for the possessor (dribble / pass / shoot).
+   * Called when action cooldown has elapsed. Dribble is handled in updatePlayer.
+   */
+  function tryAction(timestamp) {
+    if (timestamp - lastActionTime < ACTION_COOLDOWN_MS) return;
+    const possessor = getPossessor();
+    if (!possessor) return;
+    if (ball.attachedTo && ball.attachedTo !== possessor) return;
+
+    lastActionTime = timestamp;
+    const action = chooseAction(possessor);
+
+    if (action === 'shoot') {
+      executeShoot(possessor);
+      return;
+    }
+    if (action === 'pass') {
+      executePass(possessor);
+      return;
+    }
+    // dribble: attach ball to player; movement is handled in updatePlayer
+    ball.attachedTo = possessor;
+  }
+
+  /**
+   * Update a single player: move toward ball or support, and if in possession
+   * and dribbling, move with the ball. Extend for custom AI or user control.
    */
   function updatePlayer(p, dt) {
-    const half = p.team === HOME ? 1 : -1;
-    const homeHalf = p.team === HOME ? (x) => x < CENTER_X : (x) => x > CENTER_X;
-
+    const isHome = p.team === HOME;
+    const homeHalf = (x) => isHome ? x < CENTER_X : x > CENTER_X;
     const dxBall = ball.x - p.x;
     const dyBall = ball.y - p.y;
     const distBall = Math.hypot(dxBall, dyBall);
+    const isPossessor = ball.attachedTo === p;
+
+    if (isPossessor) {
+      ball.attachedTo = p;
+      const goalX = isHome ? PITCH_WIDTH - 30 : 30;
+      const toGoalX = goalX - p.x;
+      const toGoalY = CENTER_Y - p.y;
+      const len = Math.hypot(toGoalX, toGoalY) || 1;
+      p.vx += (toGoalX / len) * PLAYER_SPEED * dt;
+      p.vy += (toGoalY / len) * PLAYER_SPEED * dt;
+      p.vx *= PLAYER_DAMPING;
+      p.vy *= PLAYER_DAMPING;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.x = Math.max(PLAYER_RADIUS, Math.min(PITCH_WIDTH - PLAYER_RADIUS, p.x));
+      p.y = Math.max(PLAYER_RADIUS, Math.min(PITCH_HEIGHT - PLAYER_RADIUS, p.y));
+      ball.x = p.x + (p.vx * 8);
+      ball.y = p.y + (p.vy * 8);
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.y = Math.max(BALL_RADIUS, Math.min(PITCH_HEIGHT - BALL_RADIUS, ball.y));
+      if (Math.hypot(ball.x - p.x, ball.y - p.y) > 50) ball.attachedTo = null;
+      return;
+    }
 
     let tx = p.x;
     let ty = p.y;
-
-    if (distBall < 250) {
-      tx = ball.x - (dxBall / distBall) * 50;
-      ty = ball.y - (dyBall / distBall) * 50;
-      if (!homeHalf(tx)) tx = CENTER_X - half * 80;
+    if (distBall < 220) {
+      tx = ball.x - (dxBall / distBall) * 45;
+      ty = ball.y - (dyBall / distBall) * 45;
+      if (!homeHalf(tx)) tx = CENTER_X + (isHome ? -90 : 90);
     } else {
-      tx = p.x + (Math.random() - 0.5) * 60;
-      ty = p.y + (Math.random() - 0.5) * 40;
-      if (!homeHalf(tx)) tx = CENTER_X - half * 100;
-      tx = Math.max(30, Math.min(PITCH_WIDTH - 30, tx));
-      ty = Math.max(30, Math.min(PITCH_HEIGHT - 30, ty));
+      tx = p.x + (Math.random() - 0.5) * 50;
+      ty = p.y + (Math.random() - 0.5) * 35;
+      if (!homeHalf(tx)) tx = CENTER_X + (isHome ? -100 : 100);
+      tx = Math.max(25, Math.min(PITCH_WIDTH - 25, tx));
+      ty = Math.max(25, Math.min(PITCH_HEIGHT - 25, ty));
     }
 
-    const speed = 0.08 * dt;
-    p.vx += (tx - p.x) * speed;
-    p.vy += (ty - p.y) * speed;
-    p.vx *= 0.92;
-    p.vy *= 0.92;
+    const dx = tx - p.x;
+    const dy = ty - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    p.vx += (dx / len) * PLAYER_SPEED * dt;
+    p.vy += (dy / len) * PLAYER_SPEED * dt;
+    p.vx *= PLAYER_DAMPING;
+    p.vy *= PLAYER_DAMPING;
     p.x += p.vx;
     p.y += p.vy;
     p.x = Math.max(PLAYER_RADIUS, Math.min(PITCH_WIDTH - PLAYER_RADIUS, p.x));
@@ -259,35 +367,73 @@
   }
 
   /**
-   * Update ball physics (friction, bounds). Add spin/collision later if needed.
+   * Reset ball to center and give possession to the conceding team (kickoff).
+   * concedingTeam = team that was scored on (HOME or AWAY).
+   * Ball is placed clearly inside the pitch so goal detection doesn't re-fire.
    */
-  function updateBall(dt) {
-    const friction = 0.99;
+  function resetBallAndKickoff(concedingTeam) {
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.attachedTo = null;
+    let best = null;
+    let bestD = Infinity;
+    for (const p of players) {
+      if (p.team !== concedingTeam) continue;
+      const d = Math.hypot(p.x - CENTER_X, p.y - CENTER_Y);
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    const margin = 50;
+    if (best) {
+      ball.x = Math.max(margin, Math.min(PITCH_WIDTH - margin, best.x));
+      ball.y = Math.max(margin, Math.min(PITCH_HEIGHT - margin, best.y));
+      ball.attachedTo = best;
+    } else {
+      ball.x = CENTER_X;
+      ball.y = CENTER_Y;
+    }
+  }
+
+  function updateBall(dt, timestamp) {
+    // Goal check first (including when ball is dribbled over the line).
+    // Cooldown prevents re-triggering right after kickoff.
+    const canDetectGoal = !lastGoalTime || (timestamp - lastGoalTime > GOAL_COOLDOWN_MS);
+    if (canDetectGoal) {
+      if (ball.x < -BALL_RADIUS) {
+        lastGoalTime = timestamp;
+        scoreAway++;
+        updateScoreboard();
+        resetBallAndKickoff(HOME);
+        return;
+      }
+      if (ball.x > PITCH_WIDTH + BALL_RADIUS) {
+        lastGoalTime = timestamp;
+        scoreHome++;
+        updateScoreboard();
+        resetBallAndKickoff(AWAY);
+        return;
+      }
+    }
+
+    if (ball.attachedTo) return;
+
+    const friction = 0.992;
     ball.vx *= friction;
     ball.vy *= friction;
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
     if (ball.y < BALL_RADIUS) { ball.y = BALL_RADIUS; ball.vy *= -0.6; }
-    if (ball.y > PITCH_HEIGHT - BALL_RADIUS) { ball.y = PITCH_HEIGHT - BALL_RADIUS; ball.vy *= -0.6; }
-
-    // Goal detection
-    if (ball.x < -BALL_RADIUS) {
-      scoreAway++;
-      updateScoreboard();
-      resetBall();
-    } else if (ball.x > PITCH_WIDTH + BALL_RADIUS) {
-      scoreHome++;
-      updateScoreboard();
-      resetBall();
-    } else {
-      ball.x = Math.max(BALL_RADIUS, Math.min(PITCH_WIDTH - BALL_RADIUS, ball.x));
+    if (ball.y > PITCH_HEIGHT - BALL_RADIUS) {
+      ball.y = PITCH_HEIGHT - BALL_RADIUS;
+      ball.vy *= -0.6;
     }
+
+    ball.x = Math.max(BALL_RADIUS, Math.min(PITCH_WIDTH - BALL_RADIUS, ball.x));
   }
 
-  /**
-   * Single tick of the simulation. Extend to add more events or AI.
-   */
   function tick(timestamp) {
     const dt = Math.min(50, timestamp - lastTime);
     lastTime = timestamp;
@@ -295,16 +441,14 @@
     if (isRunning) {
       matchTimeSeconds += dt / 1000;
       document.getElementById('timer').textContent = formatTime(matchTimeSeconds);
-
-      tryPass(timestamp);
+      tryAction(timestamp);
       players.forEach((p) => updatePlayer(p, dt));
-      updateBall(dt);
+      updateBall(dt, timestamp);
     }
 
     drawPitch();
     players.forEach(drawPlayer);
     drawBall();
-
     animationId = requestAnimationFrame(tick);
   }
 
@@ -315,8 +459,16 @@
   }
 
   function updateScoreboard() {
-    document.getElementById('score-home').textContent = scoreHome;
-    document.getElementById('score-away').textContent = scoreAway;
+    const homeEl = document.getElementById('score-home');
+    const awayEl = document.getElementById('score-away');
+    if (homeEl) {
+      homeEl.textContent = String(scoreHome);
+      homeEl.innerText = String(scoreHome);
+    }
+    if (awayEl) {
+      awayEl.textContent = String(scoreAway);
+      awayEl.innerText = String(scoreAway);
+    }
   }
 
   function start() {
@@ -335,6 +487,8 @@
     scoreHome = 0;
     scoreAway = 0;
     matchTimeSeconds = 0;
+    lastActionTime = 0;
+    lastGoalTime = 0;
     initPlayers();
     resetBall();
     updateScoreboard();
@@ -359,6 +513,9 @@
     document.getElementById('btn-start').addEventListener('click', start);
     document.getElementById('btn-pause').addEventListener('click', togglePause);
     document.getElementById('btn-reset').addEventListener('click', reset);
+
+    const sel = document.getElementById('players-per-team');
+    if (sel) sel.addEventListener('change', () => { reset(); });
 
     lastTime = performance.now();
     animationId = requestAnimationFrame(tick);
